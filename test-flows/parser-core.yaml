@@ -1,0 +1,55 @@
+# Live Synth — Parser Core Test Flow
+# Tests the DSL parser's ability to handle all command types
+
+name: "Parser Core Behavior"
+description: "Validates DSL parser handles all supported commands correctly"
+
+preconditions:
+  - "Vitest installed and configured"
+  - "src/audio/parser.ts exists and exports parse function"
+
+test_cases:
+  - name: "BPM command parsing"
+    input: "bpm 128"
+    expected:
+      type: "bpm"
+      value: 128
+
+  - name: "Scale command parsing"
+    input: "scale minor C4"
+    expected:
+      type: "scale"
+      mode: "minor"
+      root: "C4"
+
+  - name: "Synth pattern parsing"
+    input: "synth saw\n  C4 . E4 . G4 . B4 ."
+    expected:
+      type: "synth"
+      waveform: "saw"
+
+  - name: "Drum pattern parsing"
+    input: "kick x . x . x . x ."
+    expected:
+      type: "kick"
+
+  - name: "Effect command parsing"
+    input: "fx reverb 0.5"
+    expected:
+      type: "fx"
+      effect: "reverb"
+
+  - name: "Invalid BPM range"
+    input: "bpm 999"
+    expected:
+      error: true
+
+  - name: "Empty input"
+    input: ""
+    expected:
+      commands: []
+
+  - name: "Comment lines ignored"
+    input: "# this is a comment\nbpm 120"
+    expected:
+      commands_count: 1
