@@ -15,9 +15,7 @@ function parseNote(note: string): { name: string; octave: number } {
 
 function toMidi(note: string): number {
   const { name, octave } = parseNote(note);
-  const idx = name.endsWith("b")
-    ? (CHROMATIC.indexOf(name[0]) + 11) % 12
-    : CHROMATIC.indexOf(name);
+  const idx = name.endsWith("b") ? (CHROMATIC.indexOf(name[0]) + 11) % 12 : CHROMATIC.indexOf(name);
   return (octave + 1) * 12 + (idx < 0 ? 0 : idx);
 }
 
@@ -69,7 +67,11 @@ export function generateBassline(scale: string, root: string, style: BassStyle):
   return notes[style].join(" ");
 }
 
-export function generateChordProgression(scale: string, root: string, type: ProgressionType): string {
+export function generateChordProgression(
+  scale: string,
+  root: string,
+  type: ProgressionType,
+): string {
   const intervals = modeIntervals(scale);
   const map: Record<ProgressionType, number[]> = {
     "I-IV-V-I": [1, 4, 5, 1],

@@ -99,6 +99,99 @@ describe("parse", () => {
     });
   });
 
+  describe("named chords", () => {
+    it("parses Cmaj7 as chord with correct notes", () => {
+      const r = parse("synth saw Cmaj7");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[0].notes).toEqual(["C4", "E4", "G4", "B4"]);
+    });
+    it("parses Dmin11 as chord", () => {
+      const r = parse("synth saw Dmin11");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[0].notes).toHaveLength(6);
+    });
+    it("parses F#dim as chord", () => {
+      const r = parse("synth saw F#dim");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[0].notes).toHaveLength(3);
+    });
+    it("parses Bbsus4 as chord", () => {
+      const r = parse("synth saw Bbsus4");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[0].notes).toHaveLength(3);
+    });
+    it("parses Eaug7 as chord", () => {
+      const r = parse("synth saw Eaug7");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[0].notes).toHaveLength(4);
+    });
+    it("parses Gadd9 as chord", () => {
+      const r = parse("synth saw Gadd9");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[0].notes).toHaveLength(4);
+    });
+    it("supports velocity suffix on named chords", () => {
+      const r = parse("synth saw Cmaj7:80");
+      const pat = (r.commands[0] as { pattern: Array<{ velocity: number }> }).pattern;
+      expect(pat[0].velocity).toBe(80);
+    });
+    it("supports repeat on named chords", () => {
+      const r = parse("synth saw Cmaj7*2");
+      const pat = (r.commands[0] as { pattern: unknown[] }).pattern;
+      expect(pat).toHaveLength(2);
+    });
+    it("keeps C4 as a single note, not a chord", () => {
+      const r = parse("synth saw C4");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string; notes: string[] }> }).pattern;
+      expect(pat[0].kind).toBe("note");
+      expect(pat[0].notes).toEqual(["C4"]);
+    });
+    it("bracket chords still work alongside named chords", () => {
+      const r = parse("synth saw Cmaj7 [C4 E4 G4] Dmin7");
+      const pat = (r.commands[0] as { pattern: Array<{ kind: string }> }).pattern;
+      expect(pat).toHaveLength(3);
+      expect(pat[0].kind).toBe("chord");
+      expect(pat[1].kind).toBe("chord");
+      expect(pat[2].kind).toBe("chord");
+    });
+    it("parses all supported named chord types", () => {
+      const types = [
+        "major",
+        "minor",
+        "maj7",
+        "min7",
+        "dim",
+        "aug",
+        "sus2",
+        "sus4",
+        "add9",
+        "min6",
+        "dom7",
+        "dim7",
+        "aug7",
+        "add11",
+        "7sus4",
+        "maj9",
+        "min9",
+        "maj11",
+        "min11",
+        "maj13",
+      ];
+      for (const t of types) {
+        const r = parse(`synth saw C${t}`);
+        expect(r.errors).toEqual([]);
+        const pat = (r.commands[0] as { pattern: Array<{ kind: string }> }).pattern;
+        expect(pat[0].kind).toBe("chord");
+      }
+    });
+  });
+
   describe("arp", () => {
     it("parses valid arp", () => {
       const r = parse("arp up 16n C4 E4 G4");
@@ -194,6 +287,84 @@ describe("parse", () => {
     it("rejects out-of-range and non-integer", () => {
       expect(parse("oct 5").errors).toHaveLength(1);
       expect(parse("oct 1.5").errors).toHaveLength(1);
+    });
+  });
+
+  describe("env", () => {
+    it("parses full envelope", () => {
+      const r = parse("env synth1 attack=0.01 decay=0.3 sustain=0.5 release=1.0");
+      expect(r.errors).toEqual([]);
+      expect(r.commands[0]).toEqual({
+        type: "env",
+        target: "synth1",
+        params: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 1.0 },
+      });
+    });
+    it("parses partial envelope", () => {
+      const r = parse("env bass1 decay=0.5 release=2.0");
+      expect(r.errors).toEqual([]);
+      expect(r.commands[0]).toEqual({
+        type: "env",
+        target: "bass1",
+        params: { decay: 0.5, release: 2.0 },
+      });
+    });
+    it("rejects invalid voice target", () => {
+      expect(parse("env notavoice attack=0.1").errors[0].message).toContain("Invalid voice target");
+    });
+    it("rejects invalid env key", () => {
+      expect(parse("env synth1 volume=0.5").errors[0].message).toContain("Invalid env param");
+    });
+    it("rejects invalid env value", () => {
+      expect(parse("env synth1 attack=abc").errors[0].message).toContain("Invalid env param");
+    });
+    it("errors when no params specified", () => {
+      expect(parse("env synth1").errors[0].message).toContain("No env params");
+    });
+  });
+
+  describe("filter", () => {
+    it("parses lowpass filter", () => {
+      const r = parse("filter synth1 lowpass 800");
+      expect(r.errors).toEqual([]);
+      expect(r.commands[0]).toEqual({
+        type: "filter",
+        target: "synth1",
+        filterType: "lowpass",
+        frequency: 800,
+        Q: 1,
+      });
+    });
+    it("parses filter with Q factor", () => {
+      const r = parse("filter lead1 highpass 2000 4");
+      expect(r.errors).toEqual([]);
+      expect(r.commands[0]).toEqual({
+        type: "filter",
+        target: "lead1",
+        filterType: "highpass",
+        frequency: 2000,
+        Q: 4,
+      });
+    });
+    it("parses bandpass filter", () => {
+      const r = parse("filter pad1 bandpass 1000 2");
+      expect(r.errors).toEqual([]);
+      expect(r.commands[0]).toMatchObject({ filterType: "bandpass", frequency: 1000, Q: 2 });
+    });
+    it("rejects invalid voice target", () => {
+      expect(parse("filter xyz lowpass 800").errors[0].message).toContain("Invalid voice target");
+    });
+    it("rejects invalid filter type", () => {
+      expect(parse("filter synth1 notch 800").errors[0].message).toContain("Invalid filter type");
+    });
+    it("rejects invalid frequency", () => {
+      expect(parse("filter synth1 lowpass abc").errors[0].message).toContain("Invalid frequency");
+    });
+    it("rejects zero frequency", () => {
+      expect(parse("filter synth1 lowpass 0").errors[0].message).toContain("Invalid frequency");
+    });
+    it("rejects invalid Q factor", () => {
+      expect(parse("filter synth1 lowpass 800 abc").errors[0].message).toContain("Invalid Q");
     });
   });
 

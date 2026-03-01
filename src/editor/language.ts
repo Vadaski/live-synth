@@ -1,13 +1,60 @@
 import { StreamLanguage } from "@codemirror/language";
 
-export const DSL_KEYWORDS = ["bpm", "scale", "synth", "bass", "pad", "lead", "arp", "fx", "vol", "swing", "oct"] as const;
+export const DSL_KEYWORDS = [
+  "bpm",
+  "scale",
+  "synth",
+  "bass",
+  "pad",
+  "lead",
+  "arp",
+  "fx",
+  "vol",
+  "swing",
+  "oct",
+] as const;
 export const DSL_DRUMS = ["kick", "snare", "hat", "clap", "tom", "rim", "shaker", "crash"] as const;
-export const DSL_WAVEFORMS = ["saw", "square", "triangle", "sine", "fm", "am", "fat", "pwm", "pulse"] as const;
+export const DSL_WAVEFORMS = [
+  "saw",
+  "square",
+  "triangle",
+  "sine",
+  "fm",
+  "am",
+  "fat",
+  "pwm",
+  "pulse",
+] as const;
 export const DSL_SCALES = [
-  "minor", "major", "pentatonic", "chromatic", "blues", "dorian", "mixolydian", "lydian", "phrygian", "locrian", "harmonicminor", "melodicminor",
+  "minor",
+  "major",
+  "pentatonic",
+  "chromatic",
+  "blues",
+  "dorian",
+  "mixolydian",
+  "lydian",
+  "phrygian",
+  "locrian",
+  "harmonicminor",
+  "melodicminor",
 ] as const;
 export const DSL_EFFECTS = [
-  "reverb", "delay", "distortion", "chorus", "filter", "phaser", "tremolo", "bitcrusher", "pingpong", "compressor", "eq", "autowah", "pitchshift", "freeverb", "vibrato",
+  "reverb",
+  "delay",
+  "distortion",
+  "chorus",
+  "filter",
+  "phaser",
+  "tremolo",
+  "bitcrusher",
+  "pingpong",
+  "compressor",
+  "eq",
+  "autowah",
+  "pitchshift",
+  "freeverb",
+  "vibrato",
 ] as const;
 
 export const DSL_HELP: Record<string, string> = {
@@ -36,7 +83,25 @@ const HIT_RE = /^x(?=$|[\s\],~:*])/i;
 const REST_RE = /^\.(?=$|[\s\],~:*])/;
 
 function buildNotes(): string[] {
-  const tones = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
+  const tones = [
+    "C",
+    "C#",
+    "Db",
+    "D",
+    "D#",
+    "Eb",
+    "E",
+    "F",
+    "F#",
+    "Gb",
+    "G",
+    "G#",
+    "Ab",
+    "A",
+    "A#",
+    "Bb",
+    "B",
+  ];
   const notes: string[] = [];
   for (let oct = 0; oct <= 9; oct++) {
     for (const tone of tones) notes.push(`${tone}${oct}`);
@@ -69,7 +134,8 @@ export const synthDSL = StreamLanguage.define({
 
     if (stream.match(/^\[/) || stream.match(/^\]/)) return "bracket";
     if (stream.match(/^~/)) return "operator";
-    if (stream.match(/^:\d{1,3}/) || stream.match(/^\*\d+/) || stream.match(/^[+-]?\d+(?:\.\d+)?/)) return "number";
+    if (stream.match(/^:\d{1,3}/) || stream.match(/^\*\d+/) || stream.match(/^[+-]?\d+(?:\.\d+)?/))
+      return "number";
     if (stream.match(NOTE_TOKEN_RE)) return "string";
     if (stream.match(HIT_RE)) return "atom";
     if (stream.match(REST_RE)) return "punctuation";

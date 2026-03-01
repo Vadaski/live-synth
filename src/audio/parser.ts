@@ -1,93 +1,59 @@
+import { parseDrumPattern, parseFxOptions, parsePattern } from "./parse-pattern.js";
 import { SCALE_NAMES } from "./scales.js";
+import {
+  ARP_MODES,
+  type ArpMode,
+  type Command,
+  DRUMS,
+  type DrumName,
+  ENV_KEYS,
+  type EnvKey,
+  FILTER_TYPES,
+  FX_NAMES,
+  type FilterType,
+  type FxName,
+  type ParseError,
+  type ParseResult,
+  type SynthWaveform,
+  VOICE_KEY_RE,
+  type VoiceType,
+  WAVEFORMS,
+} from "./types.js";
 
-export type SynthWaveform = "saw" | "square" | "triangle" | "sine" | "fm" | "am" | "fat" | "pwm" | "pulse";
-export type VoiceType = "synth" | "bass" | "pad" | "lead";
-export type DrumName = "kick" | "snare" | "hat" | "clap" | "tom" | "rim" | "shaker" | "crash" | (string & {});
-export type FxName = "reverb" | "delay" | "distortion" | "chorus" | "filter" | "phaser" | "tremolo" | "bitcrusher" | "pingpong" | "compressor" | "eq" | "autowah" | "pitchshift" | "freeverb" | "vibrato" | "stereowidener" | "chebyshev" | "jcreverb" | (string & {});
-export type ArpMode = "up" | "down" | "updown" | "random";
-export type DrumStep = "x" | "." | "~";
-export type PatternKind = "note" | "chord" | "rest" | "tie";
-export interface PatternStep { kind: PatternKind; notes: string[]; velocity: number; }
-export type Command =
-  | { type: "bpm"; value: number }
-  | { type: "scale"; mode: string; root: string }
-  | { type: VoiceType; waveform: SynthWaveform | string; pattern: any[] }
-  | { type: "arp"; mode: ArpMode; rate: string; waveform: SynthWaveform | string; pattern: any[] }
-  | { type: "drum"; name: DrumName; pattern: DrumStep[] }
-  | { type: "fx"; name: FxName; params: number[]; options?: Record<string, number | string | boolean> }
-  | { type: "vol"; voice: string; value: number }
-  | { type: "swing"; value: number }
-  | { type: "oct"; value: number };
-export interface ParseError { line: number; message: string; }
-export interface ParseResult { commands: Command[]; errors: ParseError[]; }
+export type {
+  ArpMode,
+  Command,
+  DrumName,
+  DrumStep,
+  EnvKey,
+  FilterType,
+  FxName,
+  ParseError,
+  ParseResult,
+  PatternKind,
+  PatternStep,
+  SynthWaveform,
+  VoiceType,
+} from "./types.js";
 
 const NOTE_RE = /^[A-G][#b]?-?\d+$/;
 const TOKEN_RE = /\[[^\]]+\](?::\d+)?(?:\*\d+)?|\S+/g;
-const WAVEFORMS = new Set<SynthWaveform>(["saw", "square", "triangle", "sine", "fm", "am", "fat", "pwm", "pulse"]);
-const DRUMS = new Set<DrumName>(["kick", "snare", "hat", "clap", "tom", "rim", "shaker", "crash"]);
-const FX = new Set<FxName>(["reverb", "delay", "distortion", "chorus", "filter", "phaser", "tremolo", "bitcrusher", "pingpong", "compressor", "eq", "autowah", "pitchshift", "freeverb", "vibrato", "stereowidener", "chebyshev", "jcreverb"]);
-const ARP = new Set<ArpMode>(["up", "down", "updown", "random"]);
 const SCALES = new Set(SCALE_NAMES);
-const DEFAULT_VELOCITY = 100;
-
-function parseRepeat(raw: string): { token: string; count: number } {
-  const m = /^(.*)\*(\d+)$/.exec(raw);
-  return m ? { token: m[1], count: Math.max(1, Number(m[2])) } : { token: raw, count: 1 };
-}
-
-function cloneStep(step: PatternStep, count: number): PatternStep[] {
-  return Array.from({ length: count }, () => ({ ...step, notes: [...step.notes] }));
-}
-
-function parsePatternToken(raw: string): PatternStep[] | null {
-  const { token, count } = parseRepeat(raw);
-  if (token === ".") return cloneStep({ kind: "rest", notes: [], velocity: DEFAULT_VELOCITY }, count);
-  if (token === "~") return cloneStep({ kind: "tie", notes: [], velocity: DEFAULT_VELOCITY }, count);
-  const chord = /^\[([^\]]+)\](?::(\d+))?$/.exec(token);
-  if (chord) {
-    const notes = chord[1].trim().split(/\s+/);
-    if (!notes.length || notes.some((n) => !NOTE_RE.test(n))) return null;
-    return cloneStep({ kind: "chord", notes, velocity: clampVelocity(chord[2]) }, count);
-  }
-  const note = /^([A-G][#b]?-?\d+)(?::(\d+))?$/.exec(token);
-  if (!note) return null;
-  return cloneStep({ kind: "note", notes: [note[1]], velocity: clampVelocity(note[2]) }, count);
-}
-
-function parsePattern(tokens: string[]): PatternStep[] | null {
-  const out: PatternStep[] = [];
-  for (const token of tokens) {
-    const parsed = parsePatternToken(token);
-    if (!parsed) return null;
-    out.push(...parsed);
-  }
-  return out.length ? out : null;
-}
-
-function parseDrumPattern(tokens: string[]): DrumStep[] | null {
-  const out: DrumStep[] = [];
-  for (const raw of tokens) {
-    const { token, count } = parseRepeat(raw);
-    if (token !== "x" && token !== "." && token !== "~") return null;
-    for (let i = 0; i < count; i++) out.push(token);
-  }
-  return out.length ? out : null;
-}
-
-function clampVelocity(raw?: string): number {
-  const value = Number(raw ?? DEFAULT_VELOCITY);
-  return Math.max(1, Math.min(127, Number.isFinite(value) ? Math.round(value) : DEFAULT_VELOCITY));
-}
 
 function tokenize(line: string): string[] {
   return line.match(TOKEN_RE) ?? [];
 }
-
-function parseVoice(tokens: string[], type: VoiceType): { waveform: SynthWaveform; patternTokens: string[] } {
+function parseVoice(
+  tokens: string[],
+  type: VoiceType,
+): { waveform: SynthWaveform; patternTokens: string[] } {
   const base = type === "pad" ? "fat" : "saw";
   const maybe = tokens[1]?.toLowerCase() as SynthWaveform | undefined;
   const hasWave = !!maybe && WAVEFORMS.has(maybe);
-  return { waveform: (hasWave ? maybe : base) as SynthWaveform, patternTokens: tokens.slice(hasWave ? 2 : 1) };
+  return {
+    waveform: (hasWave ? maybe : base) as SynthWaveform,
+    patternTokens: tokens.slice(hasWave ? 2 : 1),
+  };
 }
 
 export function parse(text: string): ParseResult {
@@ -113,10 +79,11 @@ export function parse(text: string): ParseResult {
       errors.push({ line: i, message: `Expected pattern after ${pending.type}` });
       pending = null;
     }
-
     if (keyword === "bpm") {
-      const value = Number(tokens[1]);
-      Number.isFinite(value) && value >= 20 && value <= 300 ? commands.push({ type: "bpm", value }) : errors.push({ line: i, message: `Invalid BPM: ${tokens[1]}` });
+      const v = Number(tokens[1]);
+      Number.isFinite(v) && v >= 20 && v <= 300
+        ? commands.push({ type: "bpm", value: v })
+        : errors.push({ line: i, message: `Invalid BPM: ${tokens[1]}` });
       continue;
     }
     if (keyword === "scale") {
@@ -138,61 +105,113 @@ export function parse(text: string): ParseResult {
     }
     if (keyword === "arp") {
       const mode = (tokens[1] ?? "") as ArpMode;
-      if (!ARP.has(mode)) errors.push({ line: i, message: `Invalid arp mode: ${tokens[1]}` });
+      if (!ARP_MODES.has(mode)) errors.push({ line: i, message: `Invalid arp mode: ${tokens[1]}` });
       else {
-        const maybe = tokens[3]?.toLowerCase() as SynthWaveform | undefined;
-        const hasWave = !!maybe && WAVEFORMS.has(maybe);
-        const pattern = parsePattern(tokens.slice(hasWave ? 4 : 3));
-        pattern ? commands.push({ type: "arp", mode, rate: tokens[2] ?? "16n", waveform: (hasWave ? maybe : "saw") as SynthWaveform, pattern }) : errors.push({ line: i, message: "Invalid arp pattern" });
+        const mw = tokens[3]?.toLowerCase() as SynthWaveform | undefined;
+        const hw = !!mw && WAVEFORMS.has(mw);
+        const pat = parsePattern(tokens.slice(hw ? 4 : 3));
+        pat
+          ? commands.push({
+              type: "arp",
+              mode,
+              rate: tokens[2] ?? "16n",
+              waveform: (hw ? mw : "saw") as SynthWaveform,
+              pattern: pat,
+            })
+          : errors.push({ line: i, message: "Invalid arp pattern" });
       }
       continue;
     }
     if (keyword === "drum" || DRUMS.has(keyword as DrumName)) {
       const name = (keyword === "drum" ? tokens[1] : tokens[0]) as DrumName;
-      const pattern = parseDrumPattern(tokens.slice(keyword === "drum" ? 2 : 1));
+      const pat = parseDrumPattern(tokens.slice(keyword === "drum" ? 2 : 1));
       if (!DRUMS.has(name)) errors.push({ line: i, message: `Unknown drum: ${name}` });
-      else if (!pattern) errors.push({ line: i, message: `Invalid drum pattern for ${name}` });
-      else commands.push({ type: "drum", name, pattern });
+      else if (!pat) errors.push({ line: i, message: `Invalid drum pattern for ${name}` });
+      else commands.push({ type: "drum", name, pattern: pat });
       continue;
     }
     if (keyword === "fx") {
-      const name = (tokens[1] ?? "") as FxName;
-      if (!FX.has(name)) errors.push({ line: i, message: `Unknown effect: ${tokens[1]}` });
+      const maybeTarget = tokens[1] ?? "";
+      const hasTarget = VOICE_KEY_RE.test(maybeTarget);
+      const nameToken = hasTarget ? (tokens[2] ?? "") : maybeTarget;
+      const name = nameToken as FxName;
+      if (!FX_NAMES.has(name)) errors.push({ line: i, message: `Unknown effect: ${nameToken}` });
       else {
-        const params: number[] = [];
-        const options: Record<string, number | string | boolean> = {};
-        for (const token of tokens.slice(2)) {
-          const [key, rawValue] = token.split("=");
-          if (rawValue === undefined) {
-            const n = Number(token);
-            if (Number.isFinite(n)) params.push(n);
-          } else {
-            const n = Number(rawValue);
-            options[key] = Number.isFinite(n) ? n : rawValue === "true" ? true : rawValue === "false" ? false : rawValue;
-          }
-        }
-        commands.push({ type: "fx", name, params, options });
+        const { params, opts } = parseFxOptions(tokens.slice(hasTarget ? 3 : 2));
+        const target = hasTarget ? maybeTarget : undefined;
+        commands.push({ type: "fx", name, target, params, options: opts });
       }
       continue;
     }
+    if (keyword === "env") {
+      const target = tokens[1] ?? "";
+      if (!VOICE_KEY_RE.test(target)) {
+        errors.push({ line: i, message: `Invalid voice target: ${target}` });
+        continue;
+      }
+      const params: Partial<Record<EnvKey, number>> = {};
+      let valid = true;
+      for (const tok of tokens.slice(2)) {
+        const m = /^(\w+)=(.+)$/.exec(tok);
+        if (!m || !ENV_KEYS.has(m[1] as EnvKey) || !Number.isFinite(Number(m[2]))) {
+          errors.push({ line: i, message: `Invalid env param: ${tok}` });
+          valid = false;
+          break;
+        }
+        params[m[1] as EnvKey] = Number(m[2]);
+      }
+      if (valid && Object.keys(params).length > 0) commands.push({ type: "env", target, params });
+      else if (valid) errors.push({ line: i, message: "No env params specified" });
+      continue;
+    }
+    if (keyword === "filter") {
+      const target = tokens[1] ?? "";
+      if (!VOICE_KEY_RE.test(target)) {
+        errors.push({ line: i, message: `Invalid voice target: ${target}` });
+        continue;
+      }
+      const filterType = (tokens[2] ?? "") as FilterType;
+      if (!FILTER_TYPES.has(filterType)) {
+        errors.push({ line: i, message: `Invalid filter type: ${tokens[2]}` });
+        continue;
+      }
+      const frequency = Number(tokens[3]);
+      if (!Number.isFinite(frequency) || frequency <= 0) {
+        errors.push({ line: i, message: `Invalid frequency: ${tokens[3]}` });
+        continue;
+      }
+      const Q = tokens[4] !== undefined ? Number(tokens[4]) : 1;
+      if (!Number.isFinite(Q) || Q <= 0) {
+        errors.push({ line: i, message: `Invalid Q factor: ${tokens[4]}` });
+        continue;
+      }
+      commands.push({ type: "filter", target, filterType, frequency, Q });
+      continue;
+    }
     if (keyword === "vol") {
-      const value = Number(tokens[2]);
-      !tokens[1] || !Number.isFinite(value) ? errors.push({ line: i, message: "Usage: vol <voiceId> <dB>" }) : commands.push({ type: "vol", voice: tokens[1], value });
+      const v = Number(tokens[2]);
+      !tokens[1] || !Number.isFinite(v)
+        ? errors.push({ line: i, message: "Usage: vol <voiceId> <dB>" })
+        : commands.push({ type: "vol", voice: tokens[1], value: v });
       continue;
     }
     if (keyword === "swing") {
-      const value = Number(tokens[1]);
-      !Number.isFinite(value) || value < 0 || value > 1 ? errors.push({ line: i, message: "Swing must be 0..1" }) : commands.push({ type: "swing", value });
+      const v = Number(tokens[1]);
+      !Number.isFinite(v) || v < 0 || v > 1
+        ? errors.push({ line: i, message: "Swing must be 0..1" })
+        : commands.push({ type: "swing", value: v });
       continue;
     }
     if (keyword === "oct") {
-      const value = Number(tokens[1]);
-      !Number.isInteger(value) || Math.abs(value) > 4 ? errors.push({ line: i, message: "Octave shift must be integer -4..4" }) : commands.push({ type: "oct", value });
+      const v = Number(tokens[1]);
+      !Number.isInteger(v) || Math.abs(v) > 4
+        ? errors.push({ line: i, message: "Octave shift must be integer -4..4" })
+        : commands.push({ type: "oct", value: v });
       continue;
     }
     errors.push({ line: i, message: `Unknown command: ${keyword}` });
   }
-
-  if (pending) errors.push({ line: lines.length - 1, message: `Missing pattern for ${pending.type}` });
+  if (pending)
+    errors.push({ line: lines.length - 1, message: `Missing pattern for ${pending.type}` });
   return { commands, errors };
 }

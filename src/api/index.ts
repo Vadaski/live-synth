@@ -1,7 +1,20 @@
-import { parse, type Command, type DrumName, type DrumStep, type FxName, type PatternStep, type SynthWaveform, type VoiceType } from "../audio/parser.js";
+import {
+  type Command,
+  type DrumName,
+  type DrumStep,
+  type FxName,
+  type PatternStep,
+  type SynthWaveform,
+  type VoiceType,
+  parse,
+} from "../audio/parser.js";
 
 export type TrackType = "synth" | "bass" | "drum" | "pad" | "lead";
-export interface LiveSynthAgentOptions { bpm?: number; scale?: string; root?: string }
+export interface LiveSynthAgentOptions {
+  bpm?: number;
+  scale?: string;
+  root?: string;
+}
 type Track = { name: string; type: TrackType; pattern: string; muted: boolean };
 type Effect = { name: string; params: number[] };
 interface LoopEngine {
@@ -43,7 +56,8 @@ export class LiveSynthAgent {
 
   async play(code: string): Promise<void> {
     const parsed = parse(code);
-    if (parsed.errors.length) throw new Error(parsed.errors.map((e) => `line ${e.line + 1}: ${e.message}`).join("; "));
+    if (parsed.errors.length)
+      throw new Error(parsed.errors.map((e) => `line ${e.line + 1}: ${e.message}`).join("; "));
     this.loadFromCommands(parsed.commands);
     this.playing = true;
     await this.syncPlayback();
@@ -55,22 +69,61 @@ export class LiveSynthAgent {
     void this.ensureEngine().then((engine) => engine?.stop());
   }
 
-  setBpm(bpm: number): void { this.bpm = Math.max(20, Math.min(300, Math.round(bpm))); this.refresh(); }
-  setScale(mode: string, root: string): void { this.mode = mode.toLowerCase(); this.root = root; this.refresh(); }
-  addTrack(name: string, type: TrackType, pattern: string): void { this.tracks.set(name, { name, type, pattern: pattern.trim(), muted: false }); this.refresh(); }
-  removeTrack(name: string): void { this.tracks.delete(name); this.refresh(); }
-  muteTrack(name: string): void { const t = this.tracks.get(name); if (t) { t.muted = true; this.refresh(); } }
-  unmuteTrack(name: string): void { const t = this.tracks.get(name); if (t) { t.muted = false; this.refresh(); } }
-  addEffect(name: string, ...params: number[]): void { this.effects.push({ name, params }); this.refresh(); }
-  clearEffects(): void { this.effects = []; this.refresh(); }
+  setBpm(bpm: number): void {
+    this.bpm = Math.max(20, Math.min(300, Math.round(bpm)));
+    this.refresh();
+  }
+  setScale(mode: string, root: string): void {
+    this.mode = mode.toLowerCase();
+    this.root = root;
+    this.refresh();
+  }
+  addTrack(name: string, type: TrackType, pattern: string): void {
+    this.tracks.set(name, { name, type, pattern: pattern.trim(), muted: false });
+    this.refresh();
+  }
+  removeTrack(name: string): void {
+    this.tracks.delete(name);
+    this.refresh();
+  }
+  muteTrack(name: string): void {
+    const t = this.tracks.get(name);
+    if (t) {
+      t.muted = true;
+      this.refresh();
+    }
+  }
+  unmuteTrack(name: string): void {
+    const t = this.tracks.get(name);
+    if (t) {
+      t.muted = false;
+      this.refresh();
+    }
+  }
+  addEffect(name: string, ...params: number[]): void {
+    this.effects.push({ name, params });
+    this.refresh();
+  }
+  clearEffects(): void {
+    this.effects = [];
+    this.refresh();
+  }
 
-  getState(): { playing: boolean; bpm: number; scale: string; tracks: string[]; effects: string[] } {
+  getState(): {
+    playing: boolean;
+    bpm: number;
+    scale: string;
+    tracks: string[];
+    effects: string[];
+  } {
     return {
       playing: this.playing,
       bpm: this.bpm,
       scale: `${this.mode} ${this.root}`,
       tracks: [...this.tracks.keys()],
-      effects: this.effects.map((fx) => `${fx.name}${fx.params.length ? `(${fx.params.join(",")})` : ""}`),
+      effects: this.effects.map(
+        (fx) => `${fx.name}${fx.params.length ? `(${fx.params.join(",")})` : ""}`,
+      ),
     };
   }
 
@@ -88,14 +141,21 @@ export class LiveSynthAgent {
       }
       lines.push("");
     }
-    for (const fx of this.effects) lines.push(`fx ${fx.name}${fx.params.length ? ` ${fx.params.join(" ")}` : ""}`);
+    for (const fx of this.effects)
+      lines.push(`fx ${fx.name}${fx.params.length ? ` ${fx.params.join(" ")}` : ""}`);
     return lines.join("\n").trim();
   }
 
-  onBeat(callback: (beat: number) => void): void { this.beatListeners.add(callback); }
-  onNote(callback: (note: string) => void): void { this.noteListeners.add(callback); }
+  onBeat(callback: (beat: number) => void): void {
+    this.beatListeners.add(callback);
+  }
+  onNote(callback: (note: string) => void): void {
+    this.noteListeners.add(callback);
+  }
 
-  private refresh(): void { if (this.playing) void this.syncPlayback().catch(() => undefined); }
+  private refresh(): void {
+    if (this.playing) void this.syncPlayback().catch(() => undefined);
+  }
 
   private async ensureEngine(): Promise<LoopEngine | null> {
     if (!this.enginePromise) {
@@ -103,8 +163,12 @@ export class LiveSynthAgent {
       this.enginePromise = importer("../audio/loop-engine.js")
         .then((mod) => {
           const engine = mod as LoopEngine;
-          engine.setOnBeat((b) => this.beatListeners.forEach((cb) => cb(b)));
-          engine.setOnNote((n) => this.noteListeners.forEach((cb) => cb(n)));
+          engine.setOnBeat((b) => {
+            for (const cb of this.beatListeners) cb(b);
+          });
+          engine.setOnNote((n) => {
+            for (const cb of this.noteListeners) cb(n);
+          });
           return engine;
         })
         .catch(() => null);
@@ -122,7 +186,10 @@ export class LiveSynthAgent {
   }
 
   private toCommands(): Command[] {
-    const commands: Command[] = [{ type: "bpm", value: this.bpm }, { type: "scale", mode: this.mode, root: this.root }];
+    const commands: Command[] = [
+      { type: "bpm", value: this.bpm },
+      { type: "scale", mode: this.mode, root: this.root },
+    ];
     for (const t of this.tracks.values()) {
       if (t.muted) continue;
       const tokens = t.pattern.split(/\s+/).filter(Boolean);
@@ -136,7 +203,8 @@ export class LiveSynthAgent {
         commands.push({ type, waveform: WAVES[t.type], pattern });
       }
     }
-    for (const fx of this.effects) commands.push({ type: "fx", name: fx.name as FxName, params: fx.params, options: {} });
+    for (const fx of this.effects)
+      commands.push({ type: "fx", name: fx.name as FxName, params: fx.params, options: {} });
     return commands;
   }
 
@@ -148,12 +216,45 @@ export class LiveSynthAgent {
     let di = 1;
     for (const c of commands) {
       if (c.type === "bpm") this.bpm = c.value;
-      if (c.type === "scale") { this.mode = c.mode; this.root = c.root; }
-      if (c.type === "synth") this.tracks.set(`synth-${si}`, { name: `synth-${si++}`, type: "synth", pattern: this.patternToString(c.pattern), muted: false });
-      if (c.type === "bass") this.tracks.set(`bass-${bi}`, { name: `bass-${bi++}`, type: "bass", pattern: this.patternToString(c.pattern), muted: false });
-      if (c.type === "pad") this.tracks.set(`pad-${si}`, { name: `pad-${si++}`, type: "pad", pattern: this.patternToString(c.pattern), muted: false });
-      if (c.type === "lead") this.tracks.set(`lead-${bi}`, { name: `lead-${bi++}`, type: "lead", pattern: this.patternToString(c.pattern), muted: false });
-      if (c.type === "drum") this.tracks.set(`${c.name}-${di}`, { name: `${c.name}-${di++}`, type: "drum", pattern: c.pattern.join(" "), muted: false });
+      if (c.type === "scale") {
+        this.mode = c.mode;
+        this.root = c.root;
+      }
+      if (c.type === "synth")
+        this.tracks.set(`synth-${si}`, {
+          name: `synth-${si++}`,
+          type: "synth",
+          pattern: this.patternToString(c.pattern),
+          muted: false,
+        });
+      if (c.type === "bass")
+        this.tracks.set(`bass-${bi}`, {
+          name: `bass-${bi++}`,
+          type: "bass",
+          pattern: this.patternToString(c.pattern),
+          muted: false,
+        });
+      if (c.type === "pad")
+        this.tracks.set(`pad-${si}`, {
+          name: `pad-${si++}`,
+          type: "pad",
+          pattern: this.patternToString(c.pattern),
+          muted: false,
+        });
+      if (c.type === "lead")
+        this.tracks.set(`lead-${bi}`, {
+          name: `lead-${bi++}`,
+          type: "lead",
+          pattern: this.patternToString(c.pattern),
+          muted: false,
+        });
+      if (c.type === "drum")
+        this.tracks.set(`${c.name}-${di}`, {
+          name: `${c.name}-${di++}`,
+          type: "drum",
+          pattern: c.pattern.join(" "),
+          muted: false,
+        });
       if (c.type === "fx") this.effects.push({ name: c.name, params: c.params });
     }
   }
@@ -165,10 +266,10 @@ export class LiveSynthAgent {
       return;
     }
     if (this.beatTimer) clearInterval(this.beatTimer);
-    const step = Math.max(40, (60_000 / this.bpm) / 2);
+    const step = Math.max(40, 60_000 / this.bpm / 2);
     this.beatTimer = setInterval(() => {
       this.beat = (this.beat + 1) % 16;
-      this.beatListeners.forEach((cb) => cb(this.beat));
+      for (const cb of this.beatListeners) cb(this.beat);
     }, step);
   }
 
@@ -177,7 +278,12 @@ export class LiveSynthAgent {
       if (token === ".") return { kind: "rest", notes: [], velocity: 100 };
       if (token === "~") return { kind: "tie", notes: [], velocity: 100 };
       const chord = /^\[([^\]]+)\](?::(\d+))?$/.exec(token);
-      if (chord) return { kind: "chord", notes: chord[1].trim().split(/\s+/), velocity: Number(chord[2] ?? 100) };
+      if (chord)
+        return {
+          kind: "chord",
+          notes: chord[1].trim().split(/\s+/),
+          velocity: Number(chord[2] ?? 100),
+        };
       const note = /^([A-G][#b]?-?\d+)(?::(\d+))?$/.exec(token);
       return { kind: "note", notes: [note?.[1] ?? token], velocity: Number(note?.[2] ?? 100) };
     });
@@ -188,7 +294,15 @@ export class LiveSynthAgent {
     if (typeof steps[0] === "string") return (steps as DrumStep[]).join(" ");
     const patternSteps = steps as PatternStep[];
     return patternSteps
-      .map((step) => step.kind === "rest" ? "." : step.kind === "tie" ? "~" : step.kind === "chord" ? `[${step.notes.join(" ")}]${step.velocity === 100 ? "" : `:${step.velocity}`}` : `${step.notes[0] ?? "C4"}${step.velocity === 100 ? "" : `:${step.velocity}`}`)
+      .map((step) =>
+        step.kind === "rest"
+          ? "."
+          : step.kind === "tie"
+            ? "~"
+            : step.kind === "chord"
+              ? `[${step.notes.join(" ")}]${step.velocity === 100 ? "" : `:${step.velocity}`}`
+              : `${step.notes[0] ?? "C4"}${step.velocity === 100 ? "" : `:${step.velocity}`}`,
+      )
       .join(" ");
   }
 }

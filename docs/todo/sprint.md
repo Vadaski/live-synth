@@ -1,6 +1,6 @@
 # Sprint Board
 
-> Last updated: 2026-02-28 by Claude Code
+> Last updated: 2026-03-01 (cycle 2) by Claude Code
 >
 > **Rules**:
 > - Single source of truth for all agent work status
@@ -42,13 +42,19 @@
 |----|------|-----------|-------------|
 | LS-002 | Unit tests: DSL parser | 2026-02-28 | 39/39 tests pass, typecheck + lint clean, security + architect review passed |
 | LS-018 | Abstract math visual engine | 2026-02-28 | Gemini CLI + review fixes: GPU memory leak fixed, FFT NaN safeguards added, chroma clamped. Build passes. |
+| LS-001 | Initial git commit | 2026-03-01 | All source committed, 32 files, 6698 insertions |
+| LS-022 | Named chord syntax | 2026-03-01 | Cmaj7/Dmin11/F#dim etc. 13 new chord types, parse-pattern.ts + types.ts extracted. 50 tests pass. |
+| LS-020 | All synth voices poly | 2026-03-01 | Bass→PolySynth(4), Lead→PolySynth(6), Arp→PolySynth(8). Sound character preserved. |
+| LS-019 | Per-track effects routing | 2026-03-01 | fx <voiceId> <effect> syntax, fx-factory.ts extracted. 50 tests pass. |
+| LS-023 | Usage manual | 2026-03-01 | 928-line Chinese manual covering all DSL, effects, chords, scales, shortcuts. |
+| LS-021 | Per-voice synth params DSL | 2026-03-01 | env + filter commands, 14 new tests (64 total). |
+| LS-004 | Unit tests: scales & chords | 2026-03-01 | 128 tests, all 25 chord types, 20 scale modes, quantize precision. |
+| LS-005 | Unit tests: effects chain | 2026-03-01 | 67 tests with Tone.js mocking, all 18 FX types covered. |
+| LS-003 | Unit tests: loop engine | 2026-03-01 | 96 tests, scheduling/transport/callbacks. 428 total. |
+| LS-006 | Unit tests: synth pool | 2026-03-01 | 73 tests, all roles/drums/caching/disposal. 428 total. |
+| LS-024 | Update presets for new features | 2026-03-01 | 12/14 presets upgraded, 2 new (Jazz Chords, Ambient Textures). |
 
 ## Backlog
-
-### P0 — Blocking
-| ID | Task | Description |
-|----|------|-------------|
-| LS-001 | Initial git commit | Commit all existing live-synth source to git with proper history |
 
 ### P1 — Important
 | ID | Task | Description |
@@ -62,6 +68,7 @@
 | LS-009 | Visual panel wow factor | Superseded by LS-018 (abstract math visuals) — review if more polish needed |
 | LS-010 | Editor text contrast | Improve code readability, crisp typography, better syntax highlighting contrast |
 | LS-011 | Preset selector redesign | Replace default HTML select with custom styled dropdown matching the aesthetic |
+| LS-024 | Update presets for new features | Update all 11 presets to use named chords, per-track fx, poly voices, and synth params. Showcase the new DSL capabilities. |
 
 ### P2 — Routine
 | ID | Task | Description |

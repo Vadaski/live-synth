@@ -28,16 +28,30 @@ const CHORD_INTERVALS: Record<string, readonly number[]> = {
   maj7: [0, 4, 7, 11],
   min7: [0, 3, 7, 10],
   dim: [0, 3, 6],
+  dim7: [0, 3, 6, 9],
   aug: [0, 4, 8],
+  aug7: [0, 4, 8, 10],
   sus2: [0, 2, 7],
   sus4: [0, 5, 7],
+  "7sus4": [0, 5, 7, 10],
   add9: [0, 4, 7, 14],
+  add11: [0, 4, 7, 17],
   "6": [0, 4, 7, 9],
   min6: [0, 3, 7, 9],
+  dom7: [0, 4, 7, 10],
+  "9": [0, 4, 7, 10, 14],
+  maj9: [0, 4, 7, 11, 14],
+  min9: [0, 3, 7, 10, 14],
+  "11": [0, 4, 7, 10, 14, 17],
+  maj11: [0, 4, 7, 11, 14, 17],
+  min11: [0, 3, 7, 10, 14, 17],
+  "13": [0, 4, 7, 10, 14, 17, 21],
+  maj13: [0, 4, 7, 11, 14, 17, 21],
 };
 const NOTE_RE = /^([A-G][#b]?)(-?\d+)$/;
 
 export const SCALE_NAMES = Object.keys(SCALE_INTERVALS);
+export const CHORD_TYPES = Object.keys(CHORD_INTERVALS);
 
 function parseNote(note: string): { name: string; octave: number } | null {
   const match = NOTE_RE.exec(note);
@@ -79,7 +93,7 @@ export function quantizeToScale(note: string, root: string, mode: string): strin
   const intervals = SCALE_INTERVALS[mode] ?? SCALE_INTERVALS.chromatic;
   const rootMidi = noteToMidi(root);
   const noteMidi = noteToMidi(note);
-  const relative = ((noteMidi - rootMidi) % 12 + 12) % 12;
+  const relative = (((noteMidi - rootMidi) % 12) + 12) % 12;
   let closest = intervals[0] ?? 0;
   let minDist = 12;
   for (const semitones of intervals) {

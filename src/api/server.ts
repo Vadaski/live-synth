@@ -1,6 +1,11 @@
+import {
+  generateArpPattern,
+  generateBassline,
+  generateChordProgression,
+  generateDrumPattern,
+} from "./dsl-generator.js";
 import { LiveSynthAgent, type TrackType } from "./index.js";
-import { generateArpPattern, generateBassline, generateChordProgression, generateDrumPattern } from "./dsl-generator.js";
-import { isAgentRequest, toError, type AgentRequest, type AgentResponse } from "./protocol.js";
+import { type AgentRequest, type AgentResponse, isAgentRequest, toError } from "./protocol.js";
 
 type WsMessage = unknown;
 interface WsSocket {
@@ -54,10 +59,14 @@ export class LiveSynthAgentServer {
 
   private async importWs(): Promise<Record<string, unknown>> {
     try {
-      const importer = new Function("m", "return import(m)") as (m: string) => Promise<Record<string, unknown>>;
+      const importer = new Function("m", "return import(m)") as (
+        m: string,
+      ) => Promise<Record<string, unknown>>;
       return await importer("ws");
     } catch {
-      throw new Error("WebSocket server unavailable. Install `ws` or pass WebSocketServer in options.");
+      throw new Error(
+        "WebSocket server unavailable. Install `ws` or pass WebSocketServer in options.",
+      );
     }
   }
 
@@ -70,7 +79,12 @@ export class LiveSynthAgentServer {
   }
 
   private async onMessage(socket: WsSocket, raw: WsMessage): Promise<void> {
-    const text = typeof raw === "string" ? raw : raw && typeof (raw as { toString?: () => string }).toString === "function" ? (raw as { toString: () => string }).toString() : "";
+    const text =
+      typeof raw === "string"
+        ? raw
+        : raw && typeof (raw as { toString?: () => string }).toString === "function"
+          ? (raw as { toString: () => string }).toString()
+          : "";
     if (!text) return this.send(socket, toError("Empty message"));
     let data: unknown;
     try {
@@ -91,18 +105,35 @@ export class LiveSynthAgentServer {
       await this.agent.play(request.code);
       return { type: "ok" };
     }
-    if (request.type === "stop") return (this.agent.stop(), { type: "ok" });
-    if (request.type === "set-bpm") return (this.agent.setBpm(request.bpm), { type: "ok" });
+    if (request.type === "stop") {
+      this.agent.stop();
+      return { type: "ok" };
+    }
+    if (request.type === "set-bpm") {
+      this.agent.setBpm(request.bpm);
+      return { type: "ok" };
+    }
     if (request.type === "add-track") {
-      if (!TRACK_TYPES.has(request.trackType as TrackType)) return toError(`Invalid track type: ${request.trackType}`);
+      if (!TRACK_TYPES.has(request.trackType as TrackType))
+        return toError(`Invalid track type: ${request.trackType}`);
       this.agent.addTrack(request.name, request.trackType as TrackType, request.pattern);
       return { type: "ok" };
     }
-    if (request.type === "remove-track") return (this.agent.removeTrack(request.name), { type: "ok" });
-    if (request.type === "add-effect") return (this.agent.addEffect(request.name, ...request.params), { type: "ok" });
-    if (request.type === "clear-effects") return (this.agent.clearEffects(), { type: "ok" });
+    if (request.type === "remove-track") {
+      this.agent.removeTrack(request.name);
+      return { type: "ok" };
+    }
+    if (request.type === "add-effect") {
+      this.agent.addEffect(request.name, ...request.params);
+      return { type: "ok" };
+    }
+    if (request.type === "clear-effects") {
+      this.agent.clearEffects();
+      return { type: "ok" };
+    }
     if (request.type === "get-state") return { type: "state", state: this.agent.getState() };
-    if (request.type === "generate") return { type: "ok", data: { code: generateFromPrompt(request.prompt) } };
+    if (request.type === "generate")
+      return { type: "ok", data: { code: generateFromPrompt(request.prompt) } };
     return toError("Unsupported request");
   }
 
@@ -116,7 +147,9 @@ export class LiveSynthAgentServer {
   }
 }
 
-export async function startAgentServer(options: LiveSynthAgentServerOptions = {}): Promise<LiveSynthAgentServer> {
+export async function startAgentServer(
+  options: LiveSynthAgentServerOptions = {},
+): Promise<LiveSynthAgentServer> {
   const server = new LiveSynthAgentServer(options);
   await server.start();
   return server;
@@ -124,15 +157,29 @@ export async function startAgentServer(options: LiveSynthAgentServerOptions = {}
 
 function generateFromPrompt(prompt: string): string {
   const text = prompt.toLowerCase();
-  const style = (["house", "dnb", "hiphop", "rock", "jazz", "techno", "latin"] as const).find((s) => text.includes(s)) ?? "house";
+  const style =
+    (["house", "dnb", "hiphop", "rock", "jazz", "techno", "latin"] as const).find((s) =>
+      text.includes(s),
+    ) ?? "house";
   const mode = text.includes("major") ? "major" : "minor";
   const root = text.match(/\b([a-g](?:#|b)?\d)\b/i)?.[1]?.toUpperCase() ?? "C4";
   const progression = mode === "major" ? "I-vi-IV-V" : "i-iv-v";
-  const bassStyle = text.includes("walking") ? "walking" : text.includes("minimal") ? "minimal" : "arpeggiated";
+  const bassStyle = text.includes("walking")
+    ? "walking"
+    : text.includes("minimal")
+      ? "minimal"
+      : "arpeggiated";
   const drums = generateDrumPattern(style);
   const bass = generateBassline(mode, root, bassStyle);
   const chords = generateChordProgression(mode, root, progression);
-  const arp = generateArpPattern(chords.split(/\s+/).filter((n) => n !== ".").slice(0, 4).join(" "), "updown");
+  const arp = generateArpPattern(
+    chords
+      .split(/\s+/)
+      .filter((n) => n !== ".")
+      .slice(0, 4)
+      .join(" "),
+    "updown",
+  );
   return `bpm 120
 scale ${mode} ${root}
 
