@@ -1,134 +1,68 @@
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { type NoteEntityType, spawnNoteEntity, updateNoteEntities } from "./note-entities.js";
-import { createQuantumCore, noteImpact, updateQuantumCore } from "./quantum-core.js";
-import { postFrag, postVert } from "./shaders.js";
+// Scene facade — same API as before, backed by 2D fullscreen shader
+// No Three.js dependency — pure WebGL2 generative visuals
+
+import {
+  type RendererContext,
+  type Uniforms,
+  disposeRenderer,
+  initRenderer,
+  renderFrame,
+  resizeRenderer,
+} from "./renderer.js";
+
+export type NoteEntityType = "synth" | "bass" | "pad" | "lead" | "kick" | "hat";
 
 export interface SceneContext {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  renderer: THREE.WebGLRenderer;
-  composer: EffectComposer;
-  controls: OrbitControls;
-  clock: THREE.Clock;
+  renderer: RendererContext;
 }
 
-// Terminal Dogma — deep crimson void
-const BG_COLOR = new THREE.Color(0x030001);
-
 let ctx: SceneContext | null = null;
-let transcendencePass: ShaderPass | null = null;
-let beatBreathTarget = 0;
-let beatBreathCurrent = 0;
-const cameraBaseZ = 22;
 let elapsedTime = 0;
+let lastTimestamp = 0;
+
+// Beat pulse — decays over time
+let beatPulse = 0;
+let beatTarget = 0;
+
+// Note flash — brief accent on note trigger
+let noteFlash = 0;
 
 export function initScene(canvas: HTMLCanvasElement): SceneContext {
-  const scene = new THREE.Scene();
-  scene.background = BG_COLOR;
-  scene.fog = new THREE.FogExp2(0x030001, 0.012);
-
-  const camera = new THREE.PerspectiveCamera(
-    55,
-    canvas.clientWidth / canvas.clientHeight,
-    0.1,
-    500,
-  );
-  camera.position.set(0, 5, cameraBaseZ);
-
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: false,
-    alpha: false,
-    powerPreference: "high-performance",
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.6;
-
-  // Distant Seele monoliths in Terminal Dogma
-  const monolithGeo = new THREE.IcosahedronGeometry(120, 1);
-  const monolithMat = new THREE.LineBasicMaterial({
-    color: 0x221108,
-    transparent: true,
-    opacity: 0.15,
-  });
-  scene.add(new THREE.LineSegments(monolithGeo, monolithMat));
-
-  const quantumCore = createQuantumCore();
-  scene.add(quantumCore);
-
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-
-  const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
-    0.3,
-    0.6,
-    0.94,
-  );
-  composer.addPass(bloomPass);
-
-  const postShader = {
-    uniforms: {
-      tDiffuse: { value: null },
-      uIntensity: { value: 0.0 },
-      uTime: { value: 0.0 },
-      uResolution: { value: new THREE.Vector2(canvas.clientWidth, canvas.clientHeight) },
-    },
-    vertexShader: postVert,
-    fragmentShader: postFrag,
-  };
-  transcendencePass = new ShaderPass(postShader);
-  composer.addPass(transcendencePass);
-
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.04;
-  controls.enablePan = false;
-  controls.minDistance = 8;
-  controls.maxDistance = 60;
-  controls.target.set(0, 0, 0);
-
-  const clock = new THREE.Clock();
-  ctx = { scene, camera, renderer, composer, controls, clock };
+  const renderer = initRenderer(canvas);
+  lastTimestamp = performance.now();
+  ctx = { renderer };
   return ctx;
 }
 
 export function onBeat(beat: number): void {
-  beatBreathTarget = beat % 4 === 0 ? 1.0 : 0.4;
+  beatTarget = beat % 4 === 0 ? 1.0 : 0.4;
 }
 
-export function triggerNote(type: NoteEntityType, pitch = 0.5, velocity = 0.8): void {
-  if (!ctx) return;
-  spawnNoteEntity(ctx.scene, type, pitch, velocity);
-  noteImpact(type, velocity, pitch);
+export function triggerNote(_type: NoteEntityType, _pitch = 0.5, velocity = 0.8): void {
+  noteFlash = Math.min(1.0, noteFlash + velocity * 0.6);
 }
 
 export function resizeScene(width: number, height: number): void {
   if (!ctx) return;
-  ctx.camera.aspect = width / height;
-  ctx.camera.updateProjectionMatrix();
-  ctx.renderer.setSize(width, height);
-  ctx.composer.setSize(width, height);
-  if (transcendencePass) {
-    transcendencePass.uniforms.uResolution.value.set(width, height);
-  }
+  resizeRenderer(ctx.renderer, width, height);
 }
 
 export function renderScene(fftData?: Float32Array): void {
   if (!ctx) return;
-  const dt = ctx.clock.getDelta();
+
+  const now = performance.now();
+  const dt = Math.min((now - lastTimestamp) / 1000, 0.1);
+  lastTimestamp = now;
   elapsedTime += dt;
 
-  beatBreathCurrent += (beatBreathTarget - beatBreathCurrent) * dt * 6.0;
-  beatBreathTarget *= 0.92;
+  // Decay beat pulse
+  beatPulse += (beatTarget - beatPulse) * dt * 6.0;
+  beatTarget *= 0.92;
 
+  // Decay note flash
+  noteFlash *= Math.max(0, 1 - dt * 8.0);
+
+  // Extract FFT energy bands
   let lowEnergy = 0;
   let midEnergy = 0;
   let highEnergy = 0;
@@ -150,37 +84,22 @@ export function renderScene(fftData?: Float32Array): void {
     highEnergy /= 16;
   }
 
-  // LCL drift camera — dreamlike with irrational frequencies
-  const e = lowEnergy * 2.0;
-  ctx.controls.target.set(
-    Math.sin(elapsedTime * 0.317) * e + Math.sin(elapsedTime * 0.173) * e * 0.5,
-    Math.cos(elapsedTime * 0.419) * e * 0.7 + Math.sin(elapsedTime * 0.091) * 0.5,
-    Math.sin(elapsedTime * 0.223) * e + Math.cos(elapsedTime * 0.137) * e * 0.3,
-  );
+  const canvas = ctx.renderer.gl.canvas as HTMLCanvasElement;
+  const uniforms: Uniforms = {
+    uTime: elapsedTime,
+    uLow: lowEnergy,
+    uMid: midEnergy,
+    uHigh: highEnergy,
+    uBeat: beatPulse,
+    uNoteFlash: noteFlash,
+    uResolution: [canvas.width, canvas.height],
+  };
 
-  const fovChaos = Math.sin(elapsedTime * 0.271) * 3 + Math.sin(elapsedTime * 0.619) * 2;
-  ctx.camera.fov = 55 + beatBreathCurrent * 8 + highEnergy * 10 + fovChaos;
-  ctx.camera.updateProjectionMatrix();
-  ctx.controls.update();
-
-  updateQuantumCore(dt, fftData, beatBreathCurrent);
-  updateNoteEntities(dt, ctx.scene, beatBreathCurrent, midEnergy);
-
-  if (transcendencePass) {
-    transcendencePass.uniforms.uIntensity.value = Math.min(
-      3.0,
-      beatBreathCurrent * 1.5 + highEnergy * 2.0,
-    );
-    transcendencePass.uniforms.uTime.value = elapsedTime;
-  }
-
-  ctx.composer.render();
+  renderFrame(ctx.renderer, uniforms);
 }
 
 export function disposeScene(): void {
   if (!ctx) return;
-  ctx.renderer.dispose();
-  ctx.composer.dispose();
-  ctx.controls.dispose();
+  disposeRenderer(ctx.renderer);
   ctx = null;
 }

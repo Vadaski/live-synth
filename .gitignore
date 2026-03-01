@@ -3,6 +3,3 @@ dist/
 .va/
 *.local
 .DS_Store
-.turbo/
-node_modules/
-dist/

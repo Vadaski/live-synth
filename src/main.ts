@@ -1,6 +1,7 @@
 // Live Synth — main entry point
 // Wire up: Editor → Parser → Audio Engine → 3D Visual Engine
 import "./styles.css";
+import { createHelpPanel } from "./app/help.js";
 import { PRESETS, loadSavedCode, saveCode } from "./app/presets.js";
 import { createTransportBar } from "./app/transport.js";
 import {
@@ -13,8 +14,8 @@ import {
 } from "./audio/loop-engine.js";
 import type { Command, ParseResult } from "./audio/parser.js";
 import { createEditor } from "./editor/setup.js";
-import type { NoteEntityType } from "./visual/note-entities.js";
 import {
+  type NoteEntityType,
   initScene,
   renderScene,
   resizeScene,
@@ -61,7 +62,14 @@ for (const preset of PRESETS) {
   presetSelect.append(opt);
 }
 presetSelectWrap.append(presetSelect);
-headerRight.append(presetSelectWrap);
+
+const helpBtn = document.createElement("button");
+helpBtn.className = "help-btn";
+helpBtn.textContent = "?";
+helpBtn.setAttribute("aria-label", "Open usage manual");
+helpBtn.title = "Usage manual (? or F1)";
+
+headerRight.append(presetSelectWrap, helpBtn);
 header.append(title, headerRight);
 
 const main = document.createElement("div");
@@ -179,6 +187,10 @@ function animate(): void {
   renderScene(fft);
   requestAnimationFrame(animate);
 }
+
+// ---- Help Panel ----
+const helpPanel = createHelpPanel(app);
+helpBtn.addEventListener("click", () => helpPanel.toggle());
 
 // ---- Boot ----
 resizeAll();
